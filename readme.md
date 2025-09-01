@@ -11,7 +11,7 @@ This is the SafePause ROS 2 Workspace.
 ### Instructions
 #### 1. Clone with Submodules
 ```bash
-git clone --recurse-submodules https://github.com/jd-u/SafePause.git
+git clone --recurse-submodules https://github.com/wsu-pmp/SafePause.git
 ```
 
 #### 2. Build
@@ -51,7 +51,7 @@ ros2 launch dsr_bringup2 dsr_bringup2_moveit.launch.py mode:=real model:=a0509 h
 ### Instructions
 #### 1. Clone with Submodules
 ```bash
-git clone --recurse-submodules https://github.com/jd-u/SafePause.git
+git clone --recurse-submodules https://github.com/wsu-pmp/SafePause.git
 ```
 
 #### 2. Install Dev Dependencies
