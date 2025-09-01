@@ -1,0 +1,58 @@
+### ROS2 https://github.com/github/gitignore/blob/main/community/ROS2.gitignore ###
+install/
+log/
+build/
+
+# Ignore generated docs
+*.dox
+*.wikidoc
+
+# eclipse stuff
+.project
+.cproject
+
+# qcreator stuff
+CMakeLists.txt.user
+
+srv/_*.py
+*.pcd
+*.pyc
+qtcreator-*
+*.user
+
+*~
+
+# Emacs
+.#*
+
+# Colcon custom files
+COLCON_IGNORE
+AMENT_IGNORE
+
+
+### .env files ### 
+.env*
+!.env*.example
+
+
+### rosbag ### 
+rosbag*/
+!/rosbag/
+!/rosbag/**/rosbag*/
+
+
+### logs ### 
+logs/
+*.log
+
+
+### venv ###
+.Python/
+pyvenv.cfg
+*venv/
+pip-selfcheck.json
+
+
+### IDE ### 
+.vscode/
+.idea/

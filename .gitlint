@@ -1,0 +1,2 @@
+[general]
+ignore=title-must-not-contain-word, body-is-missing, body-changed-file-mention

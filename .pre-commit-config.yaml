@@ -1,0 +1,42 @@
+repos:
+  # Local main protection and basic file quality checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: no-commit-to-branch
+        stages: [pre-commit]
+        args: ['--branch', 'main']        
+
+      - id: check-yaml
+        stages: [pre-commit]
+
+      - id: check-xml
+        stages: [pre-commit]
+
+  # Python linting
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        stages: [pre-commit]
+        args: [--check, --diff]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        stages: [pre-commit]
+        args: [--check-only, --diff]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        stages: [pre-commit]
+
+  # Commit message rules
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        stages: [commit-msg]
