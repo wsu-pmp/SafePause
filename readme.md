@@ -5,8 +5,7 @@ This is the SafePause ROS 2 Workspace.
 
 ## Setup
 ### Prerequisites
-- [ROS 2 Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
-- [Doosan Robotics ROS 2 Dependencies](https://github.com/DoosanRobotics/doosan-robot2?tab=readme-ov-file#installation)
+- [Ubuntu 22.04 (Jammy Jellyfish)](https://releases.ubuntu.com/jammy/)
 
 ### Instructions
 #### 1. Clone with Submodules
@@ -14,14 +13,20 @@ This is the SafePause ROS 2 Workspace.
 git clone --recurse-submodules https://github.com/wsu-pmp/SafePause.git
 ```
 
-#### 2. Build
+#### 2. Install ROS 2 and Doosan Robot 2 Dependencies
+```
+chmod +x ./setup.sh
+./setup.sh
+```
+
+#### 3. Build
 ```bash
 cd ./SafePause
 source /opt/ros/humble/setup.bash
 colcon build
 ```
 
-#### 3. *(Optional)* Install Doosan Robot Emulator
+#### 4. *(Optional)* Install Doosan Robot Emulator
 ```bash
 cd ./src/doosan-robot2
 chmod +x ./install_emulator.sh
