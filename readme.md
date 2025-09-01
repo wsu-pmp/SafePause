@@ -3,6 +3,45 @@
 This is the SafePause ROS 2 Workspace.
 
 
+## Setup
+### Prerequisites
+- [ROS 2 Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+- [Doosan Robotics ROS 2 Dependencies](https://github.com/DoosanRobotics/doosan-robot2?tab=readme-ov-file#installation)
+
+### Instructions
+#### 1. Clone with Submodules
+```bash
+git clone --recurse-submodules https://github.com/jd-u/SafePause.git
+```
+
+#### 2. Build
+```bash
+cd ./SafePause
+source /opt/ros/humble/setup.bash
+colcon build
+```
+
+#### 3. *(Optional)* Install Doosan Robot Emulator
+```bash
+cd ./src/doosan-robot2
+chmod +x ./install_emulator.sh
+sudo ./install_emulator.sh
+```
+
+
+## Use
+### Launch with MoveIt
+#### With Emulator
+```bash
+ros2 launch dsr_bringup2 dsr_bringup2_moveit.launch.py mode:=virtual model:=a0509 host:=127.0.0.1
+```
+
+#### With Robot
+```bash
+ros2 launch dsr_bringup2 dsr_bringup2_moveit.launch.py mode:=real model:=a0509 host:=<robot ip>
+```
+
+
 ## Dev Setup
 ### Prerequisites
 - [CMake](https://cmake.org/download/)
@@ -10,9 +49,9 @@ This is the SafePause ROS 2 Workspace.
 - [pip](https://pypi.org/project/pip/)
 
 ### Instructions
-#### 1. Clone Repo
+#### 1. Clone with Submodules
 ```bash
-git clone https://github.com/jd-u/SafePause.git
+git clone --recurse-submodules https://github.com/jd-u/SafePause.git
 ```
 
 #### 2. Install Dev Dependencies
