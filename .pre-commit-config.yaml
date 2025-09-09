@@ -20,6 +20,12 @@ repos:
       - id: black
         stages: [pre-commit]
         args: [--check, --diff]
+        exclude: |
+          (?x)^(
+            .*/test/test_copyright\.py|
+            .*/test/test_flake8\.py|
+            .*/test/test_pep257\.py
+          )$
 
   - repo: https://github.com/pycqa/isort
     rev: 6.0.1
@@ -27,12 +33,25 @@ repos:
       - id: isort
         stages: [pre-commit]
         args: [--check-only, --diff]
+        exclude: |
+          (?x)^(
+            .*/test/test_copyright\.py|
+            .*/test/test_flake8\.py|
+            .*/test/test_pep257\.py
+          )$
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.3.0
     hooks:
       - id: flake8
         stages: [pre-commit]
+        args: [--ignore=E501]
+        exclude: |
+          (?x)^(
+            .*/test/test_copyright\.py|
+            .*/test/test_flake8\.py|
+            .*/test/test_pep257\.py
+          )$
 
   # Commit message rules
   - repo: https://github.com/jorisroovers/gitlint
