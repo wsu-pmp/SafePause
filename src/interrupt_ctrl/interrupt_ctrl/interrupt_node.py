@@ -1,26 +1,35 @@
+import traceback
+
 import rclpy
 from rclpy.node import Node
+
+NODE_NAME: str = "interrupt_node"
 
 
 class InterruptNode(Node):
     def __init__(self):
-        super().__init__("interrupt_node")
+        super().__init__(NODE_NAME)
 
-        self.get_logger().info("interrupt alive")
+        self.get_logger().info(f"{NODE_NAME} alive")
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    node = InterruptNode()
+    logger = rclpy.logging.get_logger(NODE_NAME)
 
+    node = None
     try:
+        node = InterruptNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Interrupt received. Shutting down.")
+        logger.info("Interrupt received. Shutting down.")
     except BaseException as ex:
-        node.get_logger().error(ex)
-        node.get_logger().debug(ex.with_traceback())
+        logger.error(str(ex))
+        logger.debug(traceback.format_exc())
     finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+        if node:
+            node.destroy_node()
+
+        if rclpy.ok():
+            rclpy.try_shutdown()
