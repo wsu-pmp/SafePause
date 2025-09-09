@@ -2,3 +2,7 @@
 	path = src/doosan-robot2
 	url = https://github.com/DoosanRobotics/doosan-robot2.git
 	branch = humble
+[submodule "src/zed-ros2-wrapper"]
+	path = src/zed-ros2-wrapper
+	url = https://github.com/stereolabs/zed-ros2-wrapper.git
+	branch = master
