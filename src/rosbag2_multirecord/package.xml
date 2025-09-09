@@ -4,7 +4,7 @@
   <name>rosbag2_multirecord</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="dev@todo.com">dev</maintainer>
+  <maintainer email="dev@todo.todo">dev</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
