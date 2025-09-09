@@ -15,14 +15,14 @@ repos:
 
   # Python linting/formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.2
+    rev: v0.15.7
     hooks:
       - id: ruff-check
         stages: [pre-commit]
         args: [--no-fix]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.2
+    rev: v0.15.7
     hooks:
       - id: ruff-format
         stages: [pre-commit]
