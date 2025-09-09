@@ -51,7 +51,7 @@ logs/
 ### venv ###
 .Python/
 pyvenv.cfg
-*venv/
+*venv*/
 pip-selfcheck.json
 
 
