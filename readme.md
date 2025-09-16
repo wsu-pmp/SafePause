@@ -80,22 +80,27 @@ variables:
   - &MAX_TF_AGE 0.05 # seconds
 
 topics:
-  - name: /point_cloud
-    type: geometry_msgs/msg/PointCloud2
+  - name: /scan
+    type: sensor_msgs/msg/LaserScan
     requires_tf: true
     target_frame: *TARGET_FRAME
     max_tf_age: *MAX_TF_AGE
-    
+
   - name: /pose
     type: geometry_msgs/msg/PoseStamped
     requires_tf: true
     target_frame: *TARGET_FRAME
     max_tf_age: *MAX_TF_AGE
 
+  # String has no header, so bundling falls back to arrival time
   - name: /chatter
     type: std_msgs/msg/String
     requires_tf: false
 ```
+
+`topics` must be non-empty and free of duplicate names, and any topic with
+`requires_tf: true` must also set `target_frame`. A topic whose transform cannot
+be resolved is still bundled, with `has_transform = false` on its index entry.
 
 ## Dev Setup
 ### Prerequisites

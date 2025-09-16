@@ -1,13 +1,19 @@
+#include <algorithm>
+#include <builtin_interfaces/msg/time.hpp>
 #include <exception>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <limits>
+#include <new>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/typesupport_helpers.hpp>
 #include <rclcpp/utilities.hpp>
 #include <rosidl_typesupport_introspection_cpp/field_types.hpp>
 #include <rosidl_typesupport_introspection_cpp/message_introspection.hpp>
+#include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <yaml-cpp/yaml.h>
 
 #include "perception_pkg/perception_node.hpp"
@@ -23,9 +29,24 @@ PerceptionNode::PerceptionNode(const std::string &ns)
   declare_parameter("slop", 0.1);
   declare_parameter("processing_rate", 10.0);
 
-  queue_size_ = get_parameter("queue_size").as_int();
+  const auto queue_size = get_parameter("queue_size").as_int();
+  if (queue_size < 1) {
+    throw std::runtime_error("'queue_size' must be >= 1, got " +
+                             std::to_string(queue_size));
+  }
+  queue_size_ = static_cast<std::size_t>(queue_size);
+
   slop_ = get_parameter("slop").as_double();
+  if (slop_ < 0.0) {
+    throw std::runtime_error("'slop' must be >= 0, got " +
+                             std::to_string(slop_));
+  }
+
   processing_rate_ = get_parameter("processing_rate").as_double();
+  if (processing_rate_ <= 0.0) {
+    throw std::runtime_error("'processing_rate' must be > 0, got " +
+                             std::to_string(processing_rate_));
+  }
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -153,13 +174,48 @@ void PerceptionNode::load_config() {
   }
 
   const YAML::Node root = YAML::LoadFile(config_file);
-  for (const auto &node : root["topics"]) {
+
+  const YAML::Node topics = root["topics"];
+  if (!topics) {
+    throw std::runtime_error("config '" + config_file +
+                             "' has no 'topics' key");
+  }
+  if (!topics.IsSequence()) {
+    throw std::runtime_error("config '" + config_file +
+                             "': 'topics' must be a sequence");
+  }
+  if (topics.size() == 0) {
+    throw std::runtime_error("config '" + config_file +
+                             "': 'topics' is empty");
+  }
+
+  std::set<std::string> seen_names;
+  for (const auto &node : topics) {
     TopicConfig cfg;
     cfg.name = node["name"].as<std::string>();
     cfg.type = node["type"].as<std::string>();
     cfg.requires_tf = node["requires_tf"].as<bool>(false);
     cfg.target_frame = node["target_frame"].as<std::string>("");
     cfg.max_tf_age = node["max_tf_age"].as<double>(0.1);
+
+    // bundle entries are keyed on topic name, so a duplicate would silently
+    // collapse into one entry while still consuming a subscription
+    if (!seen_names.insert(cfg.name).second) {
+      throw std::runtime_error("config '" + config_file +
+                               "': duplicate topic '" + cfg.name + "'");
+    }
+
+    if (cfg.requires_tf && cfg.target_frame.empty()) {
+      throw std::runtime_error("config '" + config_file + "': topic '" +
+                               cfg.name +
+                               "' sets requires_tf but no 'target_frame'");
+    }
+
+    if (cfg.max_tf_age < 0.0) {
+      throw std::runtime_error("config '" + config_file + "': topic '" +
+                               cfg.name + "' has negative 'max_tf_age'");
+    }
+
     topic_configs_.push_back(cfg);
   }
   message_queues_.resize(topic_configs_.size());
