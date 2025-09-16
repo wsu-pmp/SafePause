@@ -235,9 +235,17 @@ void PerceptionNode::generic_callback(
   auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
           dm.introspection_ts->data);
-  dm.msg = std::shared_ptr<void>(malloc(members->size_of_), free);
-  members->init_function(dm.msg.get(),
-                         rosidl_runtime_cpp::MessageInitialization::ALL);
+
+  // call fini_function from shared_ptr Deleter to release heap members
+  void *raw = malloc(members->size_of_);
+  if (raw == nullptr) {
+    throw std::bad_alloc();
+  }
+  members->init_function(raw, rosidl_runtime_cpp::MessageInitialization::ALL);
+  dm.msg = std::shared_ptr<void>(raw, [members](void *p) {
+    members->fini_function(p);
+    free(p);
+  });
 
   try {
     rclcpp::SerializationBase(dm.type_support)
@@ -374,14 +382,25 @@ PerceptionNode::resolve_transform(const std::string &target,
                                   const rclcpp::Time &time, double max_age) {
   try {
     return tf_buffer_->lookupTransform(target, source, time);
-  } catch (...) {
+  } catch (const tf2::TransformException &stamped_ex) {
+    // fall back to the latest available transform if it is recent enough
     try {
       auto latest =
           tf_buffer_->lookupTransform(target, source, tf2::TimePointZero);
-      if (std::abs((rclcpp::Time(latest.header.stamp) - time).seconds()) <=
-          max_age)
+      double age =
+          std::abs((rclcpp::Time(latest.header.stamp) - time).seconds());
+      if (age <= max_age)
         return latest;
-    } catch (...) {
+
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                           "tf %s -> %s: latest transform is %.3fs from the "
+                           "message stamp, exceeding max_tf_age %.3fs",
+                           source.c_str(), target.c_str(), age, max_age);
+    } catch (const tf2::TransformException &latest_ex) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                           "tf %s -> %s unavailable: %s (at message stamp: %s)",
+                           source.c_str(), target.c_str(), latest_ex.what(),
+                           stamped_ex.what());
     }
   }
   return std::nullopt;
@@ -420,11 +439,12 @@ void PerceptionNode::processing_thread_main() {
     processing_queue_.pop_front();
     lock.unlock();
 
+    // bundles that cannot be processed are dropped
     try {
       process_bundle(bundle);
     } catch (const std::exception &ex) {
-      RCLCPP_ERROR(get_logger(), "%s", ex.what());
-      rclcpp::shutdown();
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
+                            "dropping bundle: %s", ex.what());
     }
 
     size_t backlog;
@@ -453,8 +473,7 @@ void PerceptionNode::process_bundle(const MessageBundle &bundle) {
   //   point_cloud_env = &found->second;
   //   point_cloud_msg =
   //   PerceptionNode::try_cast<sensor_msgs::msg::PointCloud2>(
-  //       *point_cloud_env, "/point_cloud", "sensor_msgs/msg/PointCloud2",
-  //       true);
+  //       *point_cloud_env, "/point_cloud", "sensor_msgs/msg/PointCloud2");
   // }
 
   // const MessageEnvelope *pose_env = nullptr;
@@ -464,14 +483,17 @@ void PerceptionNode::process_bundle(const MessageBundle &bundle) {
   //   pose_env = &found->second;
 
   //   // downcast message to its original type
-  //   // throw on unexpected type string and missing/unexpected transform
+  //   // throws on unexpected type string
   //   pose_msg = PerceptionNode::try_cast<geometry_msgs::msg::PoseStamped>(
-  //       *pose_env, "/pose", "geometry_msgs/msg/PoseStamped", true);
+  //       *pose_env, "/pose", "geometry_msgs/msg/PoseStamped");
   // }
 
   // // process downcast messages together
   // if (point_cloud_msg && pose_msg) {
-  //   // use messages and transforms
+  //   // a tf gap leaves has_transform = false; check before using transform
+  //   if (!point_cloud_env->has_transform || !pose_env->has_transform)
+  //     return;
+
   //   (void)point_cloud_msg;
   //   (void)point_cloud_env->transform;
 
@@ -488,11 +510,12 @@ void PerceptionNode::process_bundle(const MessageBundle &bundle) {
   //   if (env.type_string == "geometry_msgs/msg/PoseStamped") {
   //     auto *msg =
   //     PerceptionNode::try_cast<geometry_msgs::msg::PoseStamped>(
-  //         env, env.topic_name, env.type_string, true);
+  //         env, env.topic_name, env.type_string);
 
-  //     // use message and transform
+  //     // use message, and transform only when one was resolved
   //     (void)msg;
-  //     (void)env.transform;
+  //     if (env.has_transform)
+  //       (void)env.transform;
 
   //   } else if (env.type_string == "sensor_msgs/msg/PointCloud2") {
   //     // ...
