@@ -89,9 +89,9 @@ private:
   void process_bundle(const MessageBundle &bundle);
 
   template <typename T>
-  static const T *
-  try_cast(const MessageEnvelope &env, const std::string &topic_name,
-           const std::string &expect_type, bool expect_transform) {
+  static const T *try_cast(const MessageEnvelope &env,
+                           const std::string &topic_name,
+                           const std::string &expect_type) {
     // check type string matches expected before downcast
     // validate_discovery() ensures env.type_string matches discovered topic
     if (env.type_string != expect_type) {
@@ -99,19 +99,6 @@ private:
           "Bundle processing encountered unexpected message type for '" +
           topic_name + "': expected '" + expect_type + "', got '" +
           env.type_string + "'");
-    }
-
-    // check if expected transform is missing
-    // a failed tf lookup will cause env to differ from config
-    if (env.has_transform != expect_transform) {
-      if (expect_transform) {
-        throw std::runtime_error("Bundle processing expected transform for '" +
-                                 topic_name + "' but has_transform = false");
-      } else {
-        throw std::runtime_error(
-            "Bundle processing encountered unexpected transform for '" +
-            topic_name + "'");
-      }
     }
 
     // downcast message to its original type
