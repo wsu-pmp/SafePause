@@ -65,7 +65,8 @@ ros2 run perception_pkg perception_node --ros-args --namespace foo
 | `config_file`     | string   | Yes      | —       | Path to the YAML configuration describing input topics, message types, and TF requirements |
 | `queue_size`      | integer  | No       | `10`    | Maximum number of messages retained per input topic queue |
 | `slop`            | double   | No       | `0.1`   | Maximum allowed time difference (in seconds) between messages in a bundle |
-| `processing_rate` | double   | No       | `10.0`  | Optional rate (Hz) at which processing of bundles occurs |
+| `processing_rate` | double   | No       | `10.0`  | Maximum rate (Hz) at which bundles are processed. Bundles form as fast as the slowest input topic allows, so a value below that rate throttles processing and drops the excess |
+| `processing_queue_size` | integer | No | `100` | Maximum number of bundles held in queue |
 
 
 Example:
