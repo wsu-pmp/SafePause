@@ -28,6 +28,7 @@ PerceptionNode::PerceptionNode(const std::string &ns)
   declare_parameter("queue_size", 10);
   declare_parameter("slop", 0.1);
   declare_parameter("processing_rate", 10.0);
+  declare_parameter("processing_queue_size", 100);
 
   const auto queue_size = get_parameter("queue_size").as_int();
   if (queue_size < 1) {
@@ -48,13 +49,19 @@ PerceptionNode::PerceptionNode(const std::string &ns)
                              std::to_string(processing_rate_));
   }
 
+  const auto processing_queue_size =
+      get_parameter("processing_queue_size").as_int();
+  if (processing_queue_size < 1) {
+    throw std::runtime_error("'processing_queue_size' must be >= 1, got " +
+                             std::to_string(processing_queue_size));
+  }
+  processing_queue_size_ = static_cast<std::size_t>(processing_queue_size);
+
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  std::string topic_name =
-      "~/bundle_index" + PerceptionNode::get_namespace_append(ns);
-  index_publisher_ =
-      create_publisher<safepause_msgs::msg::MessageBundleIndex>(topic_name, 10);
+  index_publisher_ = create_publisher<safepause_msgs::msg::MessageBundleIndex>(
+      "~/bundle_index", 10);
 
   load_config();
 
@@ -244,28 +251,60 @@ bool PerceptionNode::extract_header(const DeserializedMessage &dm,
           dm.introspection_ts->data);
   for (uint32_t i = 0; i < members->member_count_; ++i) {
     const auto &member = members->members_[i];
-    if (std::string(member.name_) == "header") {
-      const void *header_ptr =
-          static_cast<const uint8_t *>(dm.msg.get()) + member.offset_;
-      auto header_members = static_cast<
-          const rosidl_typesupport_introspection_cpp::MessageMembers *>(
-          member.members_->data);
-
-      for (uint32_t j = 0; j < header_members->member_count_; ++j) {
-        const auto &h_member = header_members->members_[j];
-        const void *field_ptr =
-            static_cast<const uint8_t *>(header_ptr) + h_member.offset_;
-
-        if (std::string(h_member.name_) == "stamp") {
-          stamp = rclcpp::Time(
-              *static_cast<const builtin_interfaces::msg::Time *>(field_ptr));
-        } else if (std::string(h_member.name_) == "frame_id") {
-          frame_id = *static_cast<const std::string *>(field_ptr);
-        }
-      }
-
-      return true;
+    if (std::string(member.name_) != "header") {
+      continue;
     }
+
+    // check whether header is ROS_TYPE_MESSAGE before casting
+    if (member.type_id_ !=
+            rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE ||
+        member.is_array_ || member.members_ == nullptr) {
+      RCLCPP_WARN_ONCE(get_logger(),
+                       "member 'header' of %s is not a message; "
+                       "treating as headerless",
+                       members->message_name_);
+      return false;
+    }
+
+    const void *header_ptr =
+        static_cast<const uint8_t *>(dm.msg.get()) + member.offset_;
+    auto header_members = static_cast<
+        const rosidl_typesupport_introspection_cpp::MessageMembers *>(
+        member.members_->data);
+
+    bool got_stamp = false;
+    bool got_frame_id = false;
+    for (uint32_t j = 0; j < header_members->member_count_; ++j) {
+      const auto &h_member = header_members->members_[j];
+      const void *field_ptr =
+          static_cast<const uint8_t *>(header_ptr) + h_member.offset_;
+      const std::string h_name(h_member.name_);
+
+      if (h_name == "stamp" &&
+          h_member.type_id_ ==
+              rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE &&
+          !h_member.is_array_) {
+        stamp = rclcpp::Time(
+            *static_cast<const builtin_interfaces::msg::Time *>(field_ptr));
+        got_stamp = true;
+      } else if (h_name == "frame_id" &&
+                 h_member.type_id_ ==
+                     rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING &&
+                 !h_member.is_array_) {
+        frame_id = *static_cast<const std::string *>(field_ptr);
+        got_frame_id = true;
+      }
+    }
+
+    if (!got_stamp || !got_frame_id) {
+      RCLCPP_WARN_ONCE(get_logger(),
+                       "member 'header' of %s lacks a std_msgs/Header "
+                       "stamp/frame_id pair; treating as headerless",
+                       members->message_name_);
+      return false;
+    }
+
+    return true;
   }
   return false;
 }
@@ -325,19 +364,31 @@ void PerceptionNode::generic_callback(
   env.type_string = cfg.type;
   env.data = std::move(dm);
 
-  std::lock_guard<std::mutex> lock(sync_mutex_);
-  auto &queue = message_queues_[topic_index];
-  queue.push_back(std::move(env));
+  std::vector<MessageBundle> ready;
+  {
+    std::lock_guard<std::mutex> lock(sync_mutex_);
+    auto &queue = message_queues_[topic_index];
+    queue.push_back(std::move(env));
 
-  if (queue.size() > queue_size_) {
-    queue.pop_front();
-    dropped_messages_count_++;
+    if (queue.size() > queue_size_) {
+      queue.pop_front();
+      dropped_messages_count_++;
+    }
+
+    ready = try_create_bundle();
   }
 
-  try_create_bundle();
+  // publish outside sync_mutex_ so a slow publish / tf lookup won't bottleneck
+  // other topic callbacks
+  for (auto &bundle : ready) {
+    publish_bundle_index(bundle);
+    enqueue_bundle(std::move(bundle));
+  }
 }
 
-void PerceptionNode::try_create_bundle() {
+std::vector<MessageBundle> PerceptionNode::try_create_bundle() {
+  std::vector<MessageBundle> ready;
+
   // failing to find a match may leave queues in bundle-ready state
   // loop until at least one queue empty
   while (std::all_of(message_queues_.begin(), message_queues_.end(),
@@ -427,9 +478,10 @@ void PerceptionNode::try_create_bundle() {
       bundle.entries.emplace(env.topic_name, std::move(env));
     }
 
-    publish_bundle_index(bundle);
-    enqueue_bundle(std::move(bundle));
+    ready.push_back(std::move(bundle));
   }
+
+  return ready;
 }
 
 std::optional<geometry_msgs::msg::TransformStamped>
@@ -479,6 +531,14 @@ void PerceptionNode::publish_bundle_index(const MessageBundle &bundle) {
 void PerceptionNode::enqueue_bundle(MessageBundle bundle) {
   std::lock_guard<std::mutex> lock(processing_mutex_);
   processing_queue_.push_back(std::move(bundle));
+
+  // drop bundles arriving faster than they are being consumed, once the queue
+  // exceeds processing_queue_size_
+  while (processing_queue_.size() > processing_queue_size_) {
+    processing_queue_.pop_front();
+    dropped_bundles_count_++;
+  }
+
   processing_cv_.notify_one();
 }
 
@@ -509,9 +569,12 @@ void PerceptionNode::processing_thread_main() {
       backlog = processing_queue_.size();
     }
     if (backlog > 0) {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-                           "processing backlog: %zu items (total dropped: %lu)",
-                           backlog, dropped_messages_count_.load());
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 5000,
+          "processing backlog: %zu/%zu bundles (dropped %lu bundles, "
+          "%lu messages); raise processing_rate to keep up",
+          backlog, processing_queue_size_, dropped_bundles_count_.load(),
+          dropped_messages_count_.load());
     }
     rate.sleep();
   }

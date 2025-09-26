@@ -11,6 +11,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -76,7 +77,9 @@ private:
   void generic_callback(std::shared_ptr<rclcpp::SerializedMessage> msg,
                         std::size_t topic_index);
 
-  void try_create_bundle();
+  // caller must hold sync_mutex_
+  // returns bundles for the caller to publish once the lock is released
+  std::vector<MessageBundle> try_create_bundle();
   std::optional<geometry_msgs::msg::TransformStamped>
   resolve_transform(const std::string &target_frame,
                     const std::string &source_frame, const rclcpp::Time &time,
@@ -119,6 +122,7 @@ private:
   std::size_t queue_size_{10};
   double slop_{0.1};
   std::atomic<uint64_t> dropped_messages_count_{0};
+  std::atomic<uint64_t> dropped_bundles_count_{0};
 
   rclcpp::TimerBase::SharedPtr discovery_timer_;
   rclcpp::Time discovery_start_time_;
@@ -129,6 +133,7 @@ private:
   std::thread processing_thread_;
   std::atomic<bool> running_{true};
   double processing_rate_{10.0};
+  std::size_t processing_queue_size_{100};
 };
 
 } // namespace perception_pkg
