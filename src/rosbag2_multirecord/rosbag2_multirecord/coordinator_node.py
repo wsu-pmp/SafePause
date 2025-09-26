@@ -29,10 +29,12 @@ class MultiRecordCoordinator(Node):
             "recorder_namespaces", [""]
         )  # default to array of empty string for type inference
         self.declare_parameter("recorder_discovery_timeout", 10.0)
+        self.declare_parameter("recorder_parent_dir", "")
 
         self.output_bag_dir = self.get_parameter("output_bag_dir").value
         self.recorder_namespaces = self.get_parameter("recorder_namespaces").value
         self.discovery_timeout = self.get_parameter("recorder_discovery_timeout").value
+        self.recorder_parent_dir = self.get_parameter("recorder_parent_dir").value
 
         self.num_recorders = len(self.recorder_namespaces)
         self.started = False
@@ -131,6 +133,38 @@ class MultiRecordCoordinator(Node):
         all_success = len(successful_recorders) == len(self.recorder_info)
         return all_success, successful_recorders
 
+    def _validate_recorder_dir(self, recorder_node, output_dir):
+        # prevent directory being used that is not safe to rmdir, e.g. a parent
+        # of output_dir
+        out = Path(self.output_bag_dir).absolute()
+        rec = Path(output_dir).absolute()
+
+        if rec == out or rec in out.parents:
+            raise ValueError(
+                f"Recorder {recorder_node} output_dir '{rec}' is the output bag "
+                f"directory '{out}' or an ancestor of it; cleanup would destroy "
+                "the merged bag"
+            )
+
+        if rec == Path(rec.root) or rec == Path.home():
+            raise ValueError(
+                f"Recorder {recorder_node} output_dir '{rec}' is a root or home "
+                "directory; refusing to manage it"
+            )
+
+        for other in self.recorder_info:
+            # skip self: this recorder is already registered once discovery
+            # has completed, and a dir always overlaps itself
+            if other["node_name"] == recorder_node:
+                continue
+
+            existing = Path(other["output_dir"]).absolute()
+            if rec == existing or rec in existing.parents or existing in rec.parents:
+                raise ValueError(
+                    f"Recorder {recorder_node} output_dir '{rec}' overlaps "
+                    f"{other['node_name']} output_dir '{existing}'"
+                )
+
     def _get_recorder_node_name(self, namespace):
         if namespace == "":
             return "/rosbag2_recorder"
@@ -220,6 +254,13 @@ class MultiRecordCoordinator(Node):
                 return False
 
             output_dir = param_values[0].string_value
+            if not output_dir:
+                self.get_logger().error(
+                    f"output_dir parameter is empty on {recorder_node}"
+                )
+                return False
+
+            self._validate_recorder_dir(recorder_node, output_dir)
 
             self.recorder_info.append(
                 {
@@ -392,10 +433,21 @@ class MultiRecordCoordinator(Node):
             recorder_dir = info["output_dir"]
             if os.path.exists(recorder_dir):
                 try:
+                    # revalidate before rmtree in case of param change while node
+                    # is live
+                    self._validate_recorder_dir(info["node_name"], recorder_dir)
                     shutil.rmtree(recorder_dir)
                     self.get_logger().info(f"Removed {recorder_dir}")
                 except Exception as e:
                     self.get_logger().warn(f"Failed to remove {recorder_dir}: {e}")
+
+        # remove parent dir created by launch file
+        if self.recorder_parent_dir and os.path.isdir(self.recorder_parent_dir):
+            try:
+                os.rmdir(self.recorder_parent_dir)
+                self.get_logger().info(f"Removed {self.recorder_parent_dir}")
+            except OSError as e:
+                self.get_logger().warn(f"Left {self.recorder_parent_dir} in place: {e}")
 
 
 def main(args=None):

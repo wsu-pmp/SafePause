@@ -35,11 +35,22 @@ def launch_setup(context, *args, **kwargs):
     if not topic_groups or len(topic_groups) == 0:
         raise ValueError("'topic_groups' must contain at least one group")
 
+    # prevent duplicate topics
+    seen: dict[str, int] = {}
+    for i, topics in enumerate(topic_groups):
+        for topic in topics:
+            if topic in seen:
+                raise ValueError(
+                    f"topic '{topic}' appears in topic_groups {seen[topic]} and {i}; "
+                    "each topic must belong to exactly one group"
+                )
+            seen[topic] = i
+
     # get output directory (use config if launch arg not provided)
     if not output_bag_dir:
         output_bag_dir = config.get("output_bag_dir", "./multirecord-out")
 
-    qos_overrides = config["qos_overrides"]
+    qos_overrides = config.get("qos_overrides") or {}
 
     # create temporary directories for individual recorders
     temp_base_dir = tempfile.mkdtemp(prefix="rosbag2_multirecord_")
@@ -54,9 +65,7 @@ def launch_setup(context, *args, **kwargs):
 
         recorder_output_dir = os.path.join(temp_base_dir, f"recorder_{i}")
 
-        filtered_qos = {
-            t: qos_overrides[t] for t in topics if qos_overrides and t in qos_overrides
-        }
+        filtered_qos = {t: qos_overrides[t] for t in topics if t in qos_overrides}
 
         recorder_node = Node(
             package="rosbag2_multirecord",
@@ -89,6 +98,7 @@ def launch_setup(context, *args, **kwargs):
             {
                 "output_bag_dir": output_bag_dir,
                 "recorder_namespaces": recorder_namespaces,
+                "recorder_parent_dir": temp_base_dir,
             }
         ],
     )
