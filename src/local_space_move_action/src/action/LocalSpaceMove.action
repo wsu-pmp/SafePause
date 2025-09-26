@@ -1,0 +1,26 @@
+# Response and Feedback from https://github.com/moveit/moveit_msgs/blob/master/action/MoveGroup.action
+
+# Request
+geometry_msgs/Pose pose
+
+---
+# Response
+# An error code reflecting what went wrong
+moveit_msgs/MoveItErrorCodes error_code
+
+# The full starting state of the robot at the start of the trajectory
+moveit_msgs/RobotState trajectory_start
+
+# The trajectory that moved group produced for execution
+moveit_msgs/RobotTrajectory planned_trajectory
+
+# The trace of the trajectory recorded during execution
+moveit_msgs/RobotTrajectory executed_trajectory
+
+# The amount of time it took to complete the motion plan
+float64 planning_time
+
+---
+# Feedback
+# The internal state that the move group action currently is in
+string state
