@@ -68,16 +68,16 @@ pre-commit install --hook-type commit-msg
 ```
 
 ### Python Formatting / Linting
-Formatting with [Black](https://pypi.org/project/black/) and [isort](https://pycqa.github.io/isort/), linting with [flake8](https://pypi.org/project/flake8/)/[autoflake](https://pypi.org/project/autoflake/).
+Formatting, linting, import sorting with [Ruff](https://github.com/astral-sh/ruff).
 
 #### Check Formatting / Linting
 ```
 make check
 ```
 
-#### Apply Formatting / Linting
+#### Fix Formatting / Linting
 ```
-make fmt
+make fix
 ```
 
 ### Commit Hooks
@@ -86,9 +86,9 @@ make fmt
     - targeting `main`
 - [check-yaml](https://github.com/pre-commit/pre-commit-hooks)
 - [check-xml](https://github.com/pre-commit/pre-commit-hooks)
-- [Black](https://github.com/psf/black)
-- [isort](https://github.com/pycqa/isort)
-- [flake8](https://github.com/pycqa/flake8)
+- [ruff-check](https://github.com/astral-sh/ruff-pre-commit)
+- [ruff-format](https://github.com/astral-sh/ruff-pre-commit)
+
 
 #### On Commit Message
 - [commit-msg](https://github.com/jorisroovers/gitlint)
