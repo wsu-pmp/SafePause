@@ -13,6 +13,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_srvs.srv import Trigger
 
+from rosbag2_multirecord import recorder_node_name
+
 NODE_NAME: str = "multirecord_coordinator"
 
 
@@ -157,10 +159,7 @@ class MultiRecordCoordinator(Node):
                 )
 
     def _get_recorder_node_name(self, namespace):
-        if namespace == "":
-            return "/rosbag2_recorder"
-        else:
-            return f"/rosbag2_recorder_{namespace}"
+        return f"/{recorder_node_name(namespace)}"
 
     def _discover_recorders(self):
         self.get_logger().info("Discovering recorder nodes...")

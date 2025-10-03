@@ -17,13 +17,12 @@ from rosbag2_py import ConverterOptions, SequentialWriter, StorageOptions, Topic
 from rosidl_runtime_py.utilities import get_message
 from std_srvs.srv import Trigger
 
-NODE_NAME: str = "rosbag2_recorder"
+from rosbag2_multirecord import recorder_node_name
 
 
 class Rosbag2RecorderNode(Node):
     def __init__(self, namespace: str):
-        ns_append = f"_{namespace}" if namespace else ""
-        super().__init__(f"{NODE_NAME}{ns_append}")
+        super().__init__(recorder_node_name(namespace))
 
         self.declare_parameter("topics", [""])
         self.declare_parameter("output_dir", "")
@@ -307,7 +306,7 @@ def main(args=None):
 
     rclpy.init(args=unknown)
 
-    logger = rclpy.logging.get_logger(NODE_NAME)
+    logger = rclpy.logging.get_logger(recorder_node_name())
 
     node = None
     try:

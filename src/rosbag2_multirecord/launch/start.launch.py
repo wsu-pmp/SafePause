@@ -9,6 +9,8 @@ from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+from rosbag2_multirecord import recorder_node_name
+
 
 def launch_setup(context, *args, **kwargs):
     config_file = LaunchConfiguration("config_file").perform(context)
@@ -70,7 +72,7 @@ def launch_setup(context, *args, **kwargs):
         recorder_node = Node(
             package="rosbag2_multirecord",
             executable="recorder",
-            name=f"rosbag2_recorder_{namespace}",
+            name=recorder_node_name(namespace),
             output="screen",
             arguments=[
                 "--namespace",
