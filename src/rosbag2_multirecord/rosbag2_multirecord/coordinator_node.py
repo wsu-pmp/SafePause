@@ -92,43 +92,34 @@ class MultiRecordCoordinator(Node):
             future = info[client_attr].call_async(Trigger.Request())
             futures.append((info, future))
 
-        # wait for all responses
-        start_time = time.time()
-        successful_recorders = []
+        # give every recorder the full timeout period to respond
+        deadline = time.time() + timeout
+        while time.time() < deadline and not all(f.done() for _, f in futures):
+            time.sleep(0.01)
 
+        successful_recorders = []
         for info, future in futures:
-            remaining = timeout - (time.time() - start_time)
-            if remaining <= 0:
+            if not future.done():
                 self.get_logger().error(
                     f"Recorder {info['node_name']} {service_name} service call timed out"
                 )
                 continue
 
-            # wait for future to complete
-            end_time = time.time() + remaining
-            while not future.done() and time.time() < end_time:
-                time.sleep(0.01)
-
-            if not future.done():
-                self.get_logger().error(
-                    f"Recorder {info['node_name']} {service_name} service call timed out"
-                )
-            else:
-                try:
-                    result = future.result()
-                    if not result.success:
-                        self.get_logger().error(
-                            f"Recorder {info['node_name']} failed to {service_name}: {result.message}"
-                        )
-                    else:
-                        self.get_logger().info(
-                            f"Recorder {info['node_name']} {service_name}ed successfully"
-                        )
-                        successful_recorders.append(info)
-                except Exception as e:
+            try:
+                result = future.result()
+                if not result.success:
                     self.get_logger().error(
-                        f"Recorder {info['node_name']} {service_name} service call failed: {e}"
+                        f"Recorder {info['node_name']} failed to {service_name}: {result.message}"
                     )
+                else:
+                    self.get_logger().info(
+                        f"Recorder {info['node_name']} {service_name} succeeded"
+                    )
+                    successful_recorders.append(info)
+            except Exception as e:
+                self.get_logger().error(
+                    f"Recorder {info['node_name']} {service_name} service call failed: {e}"
+                )
 
         all_success = len(successful_recorders) == len(self.recorder_info)
         return all_success, successful_recorders
@@ -174,7 +165,7 @@ class MultiRecordCoordinator(Node):
     def _discover_recorders(self):
         self.get_logger().info("Discovering recorder nodes...")
 
-        start_time = time.time()
+        deadline = time.time() + self.discovery_timeout
 
         for namespace in self.recorder_namespaces:
             recorder_node = self._get_recorder_node_name(namespace)
@@ -202,35 +193,21 @@ class MultiRecordCoordinator(Node):
                 callback_group=self.client_callback_group,
             )
 
-            # wait for services to be available
-            timeout_remaining = self.discovery_timeout - (time.time() - start_time)
-            if timeout_remaining <= 0:
-                self.get_logger().error(f"Timeout discovering recorder {recorder_node}")
-                return False
-
-            if not start_client.wait_for_service(timeout_sec=timeout_remaining):
-                self.get_logger().error(
-                    f"Recorder {recorder_node} start service not available after {timeout_remaining}s"
-                )
-                return False
-
-            if not pause_client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().error(
-                    f"Recorder {recorder_node} pause service not available"
-                )
-                return False
-
-            if not stop_client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().error(
-                    f"Recorder {recorder_node} stop service not available"
-                )
-                return False
-
-            if not param_client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().error(
-                    f"Recorder {recorder_node} parameter service not available"
-                )
-                return False
+            # give every service the full timeout period to respond
+            clients = (
+                ("start", start_client),
+                ("pause", pause_client),
+                ("stop", stop_client),
+                ("parameter", param_client),
+            )
+            for label, client in clients:
+                remaining = deadline - time.time()
+                if remaining <= 0 or not client.wait_for_service(timeout_sec=remaining):
+                    self.get_logger().error(
+                        f"Recorder {recorder_node} {label} service not available "
+                        f"within the {self.discovery_timeout}s discovery timeout"
+                    )
+                    return False
 
             # get output_dir parameter from recorder
             param_request = GetParameters.Request()
@@ -238,7 +215,9 @@ class MultiRecordCoordinator(Node):
             param_future = param_client.call_async(param_request)
 
             # wait for parameter response
-            rclpy.spin_until_future_complete(self, param_future, timeout_sec=5.0)
+            rclpy.spin_until_future_complete(
+                self, param_future, timeout_sec=max(deadline - time.time(), 0.0)
+            )
 
             if param_future.result() is None:
                 self.get_logger().error(
@@ -272,10 +251,6 @@ class MultiRecordCoordinator(Node):
                     "stop_client": stop_client,
                 }
             )
-
-            # self.get_logger().info(
-            #     f"Recorder {recorder_node} discovered (output: {output_dir})"
-            # )
 
         lines = "\n".join(
             f"\t{i['node_name']} (output: {i['output_dir']})"
@@ -337,7 +312,7 @@ class MultiRecordCoordinator(Node):
 
         self.get_logger().info("Stopping recording on all recorders...")
 
-        _, successful_recorders = self._call_recorder_services(
+        all_success, successful_recorders = self._call_recorder_services(
             "stop", "stop_client", timeout=10.0
         )
 
@@ -351,9 +326,19 @@ class MultiRecordCoordinator(Node):
             self._merge_bags(successful_recorders)
             self._cleanup_temp_dirs(successful_recorders)
 
-            response.success = True
-            response.message = "Recording stopped, bags merged successfully"
-            self.get_logger().info("Recording completed successfully")
+            # report failed recorders on stop
+            failed = len(self.recorder_info) - len(successful_recorders)
+            response.success = all_success
+            if all_success:
+                response.message = "Recording stopped, bags merged successfully"
+                self.get_logger().info("Recording completed successfully")
+            else:
+                response.message = (
+                    f"Recording stopped, but {failed} of "
+                    f"{len(self.recorder_info)} recorders failed; merged bag is "
+                    "incomplete"
+                )
+                self.get_logger().error(response.message)
         except Exception as e:
             self.get_logger().error(f"Error during merge/cleanup: {e}")
             response.success = False
