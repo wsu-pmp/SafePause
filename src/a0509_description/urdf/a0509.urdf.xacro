@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="a0509">
+  <!-- dsr2 description for a0509 -->
+  <xacro:arg name="model" default="a0509" />
+  <xacro:arg name="color" default="blue" />
+  <xacro:include filename="$(find dsr_description2)/xacro/a0509.urdf.xacro" />
+
+  <!-- zed2i description -->
+  <xacro:arg name="camera_name" default="zed" />
+  <xacro:arg name="camera_model" default="zed2i" />
+  <xacro:include filename="$(find zed_wrapper)/urdf/zed_descr.urdf.xacro" />
+
+  <!-- join zed_camera_link (threaded screw hole) directly to link_6 -->
+  <!-- simulated 3d printed bracket with origin offset (rough estimation) -->
+  <joint name="camera_mount" type="fixed">
+    <origin xyz="0 -0.07 -0.01" rpy="0 -1.57 1.57" />
+    <parent link="link_6" />
+    <child link="zed_camera_link" />
+  </joint>
+</robot>
