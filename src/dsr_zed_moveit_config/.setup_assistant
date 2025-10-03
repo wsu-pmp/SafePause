@@ -1,0 +1,10 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: dsr_moveit_config_a0509
+    relative_path: urdf/a0509.urdf
+  srdf:
+    relative_path: config/dsr.srdf
+  package_settings:
+    author_name: dev
+    author_email: dev@todo.todo
+    generated_timestamp: 1759459055
