@@ -28,9 +28,11 @@ class Rosbag2RecorderNode(Node):
         self.declare_parameter("topics", [""])
         self.declare_parameter("output_dir", "")
         self.declare_parameter("qos_overrides_yaml", "")
+        self.declare_parameter("require_all_topics", True)
 
         self.topics = self.get_parameter("topics").value
         self.output_dir = self.get_parameter("output_dir").value
+        self.require_all_topics = self.get_parameter("require_all_topics").value
 
         qos_overrides_yaml = self.get_parameter("qos_overrides_yaml").value
         self.qos_overrides = (
@@ -92,9 +94,68 @@ class Rosbag2RecorderNode(Node):
                 time.sleep(0.1)
 
         if undiscovered_topics:
-            self.get_logger().warning(
-                f"Failed to discover topics after {timeout}s: {list(undiscovered_topics)}"
+            missing = sorted(undiscovered_topics)
+            if self.require_all_topics:
+                raise RuntimeError(
+                    f"Failed to discover topics after {timeout}s: {missing}"
+                )
+
+            self.get_logger().error(
+                f"Failed to discover topics after {timeout}s, "
+                f"nothing will be recorded for them: {missing}"
             )
+
+    @staticmethod
+    def _enum_from_name(enum_cls, field, value):
+        try:
+            return enum_cls[value.upper()]
+        except KeyError:
+            valid = ", ".join(m.lower() for m in enum_cls.__members__ if m != "UNKNOWN")
+            raise ValueError(
+                f"invalid qos {field} '{value}'; expected one of: {valid}"
+            ) from None
+
+    def _qos_from_override(self, override):
+        profile = QoSProfile(depth=override.get("depth", 10))
+
+        if value := override.get("reliability"):
+            profile.reliability = self._enum_from_name(
+                QoSReliabilityPolicy, "reliability", value
+            )
+        if value := override.get("durability"):
+            profile.durability = self._enum_from_name(
+                QoSDurabilityPolicy, "durability", value
+            )
+        if value := override.get("history"):
+            profile.history = self._enum_from_name(QoSHistoryPolicy, "history", value)
+
+        return profile
+
+    def _resolve_qos(self, topic):
+        if override := self.qos_overrides.get(topic):
+            return self._qos_from_override(override)
+
+        profile = QoSProfile(
+            depth=10,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
+        # choose the most permissive QoS setting a publisher offers
+        infos = self.get_publishers_info_by_topic(topic)
+        if not infos:
+            profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+            profile.durability = QoSDurabilityPolicy.VOLATILE
+            return profile
+
+        for info in infos:
+            if info.qos_profile.reliability == QoSReliabilityPolicy.BEST_EFFORT:
+                profile.reliability = QoSReliabilityPolicy.BEST_EFFORT
+            if info.qos_profile.durability == QoSDurabilityPolicy.VOLATILE:
+                profile.durability = QoSDurabilityPolicy.VOLATILE
+
+        return profile
 
     def _try_subscribe(self, topic):
         try:
@@ -110,31 +171,9 @@ class Rosbag2RecorderNode(Node):
             if not topic_type:
                 return False
 
-            self.topic_types[topic] = topic_type
-
-            # create topic metadata
-            topic_metadata = TopicMetadata(
-                name=topic, type=topic_type, serialization_format="cdr"
-            )
-            self.writer.create_topic(topic_metadata)
-
             # get message class
             msg_class = get_message(topic_type)
-
-            qos_profile = 10  # default depth
-            if override := self.qos_overrides.get(topic):
-                qos_profile = QoSProfile(
-                    reliability=QoSReliabilityPolicy[o.upper()]
-                    if (o := override.get("reliability"))
-                    else 0,
-                    durability=QoSDurabilityPolicy[o.upper()]
-                    if (o := override.get("durability"))
-                    else 0,
-                    history=QoSHistoryPolicy[o.upper()]
-                    if (o := override.get("history"))
-                    else 0,
-                    depth=override.get("depth", 10),
-                )
+            qos_profile = self._resolve_qos(topic)
 
             sub = self.create_subscription(
                 msg_class,
@@ -142,9 +181,18 @@ class Rosbag2RecorderNode(Node):
                 lambda msg, t=topic: self._message_callback(msg, t),
                 qos_profile,
             )
+
+            self.writer.create_topic(
+                TopicMetadata(name=topic, type=topic_type, serialization_format="cdr")
+            )
+
+            self.topic_types[topic] = topic_type
             self.subscribers[topic] = sub
 
-            self.get_logger().info(f"Subscribed to {topic} ({topic_type})")
+            self.get_logger().info(
+                f"Subscribed to {topic} ({topic_type}) as "
+                f"{qos_profile.reliability.name}/{qos_profile.durability.name}"
+            )
             return True
 
         except Exception as e:
@@ -153,24 +201,27 @@ class Rosbag2RecorderNode(Node):
             return False
 
     def _message_callback(self, msg, topic):
-        """Callback for received messages"""
-        with self.recording_lock:
-            if not self.recording:
-                return
+        if not self.recording:
+            return
 
-            try:
-                # serialize and write message
-                serialized_msg = serialize_message(msg)
-                timestamp = (
-                    self.get_clock().now().nanoseconds
-                )  # use system time in nanoseconds
+        try:
+            # serialize outside the lock
+            serialized_msg = serialize_message(msg)
+
+            # receipt time
+            timestamp = self.get_clock().now().nanoseconds
+
+            with self.recording_lock:
+                if not self.recording or self.writer is None:
+                    return
                 self.writer.write(topic, serialized_msg, timestamp)
-                self.get_logger().debug(f"Wrote message from {topic} at {timestamp}")
-            except Exception as e:
-                self.get_logger().error(
-                    f"Error writing message from {topic}: {e}",
-                    throttle_duration_sec=1.0,
-                )
+
+            self.get_logger().debug(f"Wrote message from {topic} at {timestamp}")
+        except Exception as e:
+            self.get_logger().error(
+                f"Error writing message from {topic}: {e}",
+                throttle_duration_sec=1.0,
+            )
 
     def _shutdown(self):
         if self.shutdown_timer:
