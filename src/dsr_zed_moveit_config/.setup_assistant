@@ -1,7 +1,7 @@
 moveit_setup_assistant_config:
   urdf:
-    package: dsr_moveit_config_a0509
-    relative_path: urdf/a0509.urdf
+    package: a0509_description
+    relative_path: urdf/a0509.urdf.xacro
   srdf:
     relative_path: config/dsr.srdf
   package_settings:
