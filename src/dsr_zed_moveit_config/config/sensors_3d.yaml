@@ -1,0 +1,11 @@
+sensors:
+  - default_sensor
+default_sensor:
+  filtered_cloud_topic: /zed/zed_node/filtered_cloud
+  max_range: 5.0
+  max_update_rate: 10
+  padding_offset: 0.1
+  padding_scale: 1.0
+  point_cloud_topic: /zed/zed_node/point_cloud/cloud_registered
+  point_subsample: 3
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
