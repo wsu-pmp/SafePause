@@ -43,9 +43,13 @@ rosbag*/
 !/src/rosbag2_multirecord/**
 
 
-### logs ### 
+### logs ###
 logs/
 *.log
+
+### event_logger output ###
+*.jsonl
+event_logs/
 
 
 ### venv ###
