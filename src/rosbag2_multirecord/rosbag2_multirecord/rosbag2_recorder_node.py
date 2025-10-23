@@ -17,6 +17,7 @@ from rosbag2_py import ConverterOptions, SequentialWriter, StorageOptions, Topic
 from rosidl_runtime_py.utilities import get_message
 from std_srvs.srv import Trigger
 
+from event_logger import EventLogger
 from rosbag2_multirecord import recorder_node_name
 
 
@@ -50,6 +51,18 @@ class Rosbag2RecorderNode(Node):
         self.subscribers = {}
         self.topic_types = {}
         self.shutdown_timer = None
+        self.message_counts = {}
+        self.write_errors = 0
+
+        self.events = EventLogger(
+            self,
+            recorder_node_name(namespace),
+            {
+                "topics": list(self.topics),
+                "output_dir": self.output_dir,
+                "require_all_topics": self.require_all_topics,
+            },
+        )
 
         self._setup_writer()
 
@@ -94,6 +107,16 @@ class Rosbag2RecorderNode(Node):
 
         if undiscovered_topics:
             missing = sorted(undiscovered_topics)
+
+            self.events.log(
+                {
+                    "event": "topic_discovery_failed",
+                    "topics": missing,
+                    "timeout": timeout,
+                    "fatal": self.require_all_topics,
+                }
+            )
+
             if self.require_all_topics:
                 raise RuntimeError(
                     f"Failed to discover topics after {timeout}s: {missing}"
@@ -188,6 +211,18 @@ class Rosbag2RecorderNode(Node):
             self.topic_types[topic] = topic_type
             self.subscribers[topic] = sub
 
+            self.events.log(
+                {
+                    "event": "subscribed",
+                    "topic": topic,
+                    "type": topic_type,
+                    "reliability": qos_profile.reliability.name,
+                    "durability": qos_profile.durability.name,
+                    "depth": qos_profile.depth,
+                    "from_override": topic in self.qos_overrides,
+                }
+            )
+
             self.get_logger().info(
                 f"Subscribed to {topic} ({topic_type}) as "
                 f"{qos_profile.reliability.name}/{qos_profile.durability.name}"
@@ -195,6 +230,9 @@ class Rosbag2RecorderNode(Node):
             return True
 
         except Exception as e:
+            self.events.log(
+                {"event": "subscribe_failed", "topic": topic, "error": str(e)}
+            )
             self.get_logger().error(f"Failed to subscribe to {topic}: {e}")
             self.get_logger().debug(traceback.format_exc())
             return False
@@ -214,9 +252,18 @@ class Rosbag2RecorderNode(Node):
                 if not self.recording or self.writer is None:
                     return
                 self.writer.write(topic, serialized_msg, timestamp)
+                self.message_counts[topic] = self.message_counts.get(topic, 0) + 1
 
             self.get_logger().debug(f"Wrote message from {topic} at {timestamp}")
         except Exception as e:
+            with self.recording_lock:
+                self.write_errors += 1
+                errors = self.write_errors
+            # only log the first failure, subsequent failures are part of summary
+            if errors == 1:
+                self.events.log(
+                    {"event": "write_error", "topic": topic, "error": str(e)}
+                )
             self.get_logger().error(
                 f"Error writing message from {topic}: {e}",
                 throttle_duration_sec=1.0,
@@ -237,6 +284,7 @@ class Rosbag2RecorderNode(Node):
                 self.recording = True
                 response.success = True
                 response.message = "Recording started"
+                self.events.log({"event": "recording_started"})
                 self.get_logger().info("Recording started")
 
         return response
@@ -250,6 +298,9 @@ class Rosbag2RecorderNode(Node):
                 self.recording = False
                 response.success = True
                 response.message = "Recording paused"
+                self.events.log(
+                    {"event": "recording_paused", "counts": dict(self.message_counts)}
+                )
                 self.get_logger().info("Recording paused")
 
         return response
@@ -278,9 +329,19 @@ class Rosbag2RecorderNode(Node):
                     self._shutdown,
                 )
 
+                self.events.log(
+                    {
+                        "event": "recording_stopped",
+                        "counts": dict(self.message_counts),
+                        "total": sum(self.message_counts.values()),
+                        "write_errors": self.write_errors,
+                    }
+                )
+
                 response.success = True
                 response.message = "Recording stopped successfully"
             except Exception as e:
+                self.events.log({"event": "stop_failed", "error": str(e)})
                 self.get_logger().error(f"Error stopping recording: {e}")
                 response.success = False
                 response.message = f"Error stopping: {str(e)}"
@@ -296,6 +357,7 @@ class Rosbag2RecorderNode(Node):
                 except BaseException as _:
                     pass
 
+        self.events.close()
         super().destroy_node()
 
 
