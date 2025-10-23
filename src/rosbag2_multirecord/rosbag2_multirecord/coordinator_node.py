@@ -13,6 +13,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_srvs.srv import Trigger
 
+from event_logger import EventLogger
 from rosbag2_multirecord import recorder_node_name
 
 NODE_NAME: str = "multirecord_coordinator"
@@ -68,8 +69,19 @@ class MultiRecordCoordinator(Node):
         # service clients for recorder nodes
         self.recorder_info = []
 
+        self.events = EventLogger(
+            self,
+            NODE_NAME,
+            {
+                "output_bag_dir": self.output_bag_dir,
+                "recorder_namespaces": list(self.recorder_namespaces),
+                "discovery_timeout": self.discovery_timeout,
+            },
+        )
+
         # discover and connect to all recorder nodes
         if not self._discover_recorders():
+            self.events.log({"event": "discovery_failed"})
             self.get_logger().error("Failed to discover all recorder nodes")
             raise RuntimeError("Recorder discovery failed")
 
@@ -100,8 +112,10 @@ class MultiRecordCoordinator(Node):
             time.sleep(0.01)
 
         successful_recorders = []
+        outcomes = {}
         for info, future in futures:
             if not future.done():
+                outcomes[info["node_name"]] = "timed_out"
                 self.get_logger().error(
                     f"Recorder {info['node_name']} {service_name} service call timed out"
                 )
@@ -110,20 +124,31 @@ class MultiRecordCoordinator(Node):
             try:
                 result = future.result()
                 if not result.success:
+                    outcomes[info["node_name"]] = f"refused: {result.message}"
                     self.get_logger().error(
                         f"Recorder {info['node_name']} failed to {service_name}: {result.message}"
                     )
                 else:
+                    outcomes[info["node_name"]] = "ok"
                     self.get_logger().info(
                         f"Recorder {info['node_name']} {service_name} succeeded"
                     )
                     successful_recorders.append(info)
             except Exception as e:
+                outcomes[info["node_name"]] = f"error: {e}"
                 self.get_logger().error(
                     f"Recorder {info['node_name']} {service_name} service call failed: {e}"
                 )
 
         all_success = len(successful_recorders) == len(self.recorder_info)
+        self.events.log(
+            {
+                "event": "recorder_service_call",
+                "service": service_name,
+                "all_success": all_success,
+                "outcomes": outcomes,
+            }
+        )
         return all_success, successful_recorders
 
     def _validate_recorder_dir(self, recorder_node, output_dir):
@@ -255,6 +280,14 @@ class MultiRecordCoordinator(Node):
             f"\t{i['node_name']} (output: {i['output_dir']})"
             for i in self.recorder_info
         )
+        self.events.log(
+            {
+                "event": "recorders_discovered",
+                "recorders": {
+                    i["node_name"]: i["output_dir"] for i in self.recorder_info
+                },
+            }
+        )
         self.get_logger().info(
             f"All recorders discovered ({self.num_recorders}):\n{lines}"
         )
@@ -265,6 +298,7 @@ class MultiRecordCoordinator(Node):
         if self.shutdown_timer:
             self.shutdown_timer.cancel()
 
+        self.events.close()
         threading.Thread(target=rclpy.shutdown, daemon=True).start()
 
     def start_recording_callback(self, request, response):
@@ -338,6 +372,16 @@ class MultiRecordCoordinator(Node):
                     "incomplete"
                 )
                 self.get_logger().error(response.message)
+
+            self.events.log(
+                {
+                    "event": "run_complete",
+                    "complete": all_success,
+                    "recorders_total": len(self.recorder_info),
+                    "recorders_merged": len(successful_recorders),
+                    "output_bag_dir": self.output_bag_dir,
+                }
+            )
         except Exception as e:
             self.get_logger().error(f"Error during merge/cleanup: {e}")
             response.success = False
@@ -393,8 +437,23 @@ class MultiRecordCoordinator(Node):
         result = subprocess.run(merge_cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
+            self.events.log(
+                {
+                    "event": "merge_failed",
+                    "returncode": result.returncode,
+                    "stderr": result.stderr,
+                }
+            )
             raise RuntimeError(f"mcap merge failed: {result.stderr}")
 
+        self.events.log(
+            {
+                "event": "merged",
+                "command": merge_cmd,
+                "sources": mcap_files,
+                "output": merged_mcap,
+            }
+        )
         self.get_logger().info(f"Merged bag created: {merged_mcap}")
 
         # reindex the merged bag
@@ -423,6 +482,13 @@ class MultiRecordCoordinator(Node):
                     shutil.rmtree(recorder_dir)
                     self.get_logger().info(f"Removed {recorder_dir}")
                 except Exception as e:
+                    self.events.log(
+                        {
+                            "event": "cleanup_refused",
+                            "dir": recorder_dir,
+                            "reason": str(e),
+                        }
+                    )
                     self.get_logger().warn(f"Failed to remove {recorder_dir}: {e}")
 
         # remove parent dir created by launch file
