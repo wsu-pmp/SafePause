@@ -19,6 +19,7 @@ find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(safepause_msgs REQUIRED)
+find_package(event_logger REQUIRED)
 
 # # topic dependent
 # find_package(sensor_msgs REQUIRED)
@@ -41,6 +42,7 @@ ament_target_dependencies(perception_node
   rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
   safepause_msgs
+  event_logger
   # # topic dependent
   # sensor_msgs
 )

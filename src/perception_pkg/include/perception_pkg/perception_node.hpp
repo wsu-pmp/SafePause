@@ -1,5 +1,6 @@
 #pragma once
 
+#include <event_logger/event_logger.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/generic_subscription.hpp>
 #include <rclcpp/node.hpp>
@@ -15,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -134,6 +136,19 @@ private:
   std::atomic<bool> running_{true};
   double processing_rate_{10.0};
   std::size_t processing_queue_size_{100};
+
+  std::unique_ptr<event_logger::EventLogger> events_;
+
+  // topics currently publishing without their required transform
+  std::set<std::string> degraded_topics_;
+
+  // counters last reported
+  uint64_t reported_dropped_messages_{0};
+  uint64_t reported_dropped_bundles_{0};
+  uint64_t bundles_published_{0};
+  uint64_t reported_bundles_published_{0};
+  rclcpp::TimerBase::SharedPtr summary_timer_;
+  void log_summary();
 };
 
 } // namespace perception_pkg

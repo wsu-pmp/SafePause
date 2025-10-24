@@ -65,6 +65,27 @@ PerceptionNode::PerceptionNode(const std::string &ns)
 
   load_config();
 
+  nlohmann::json topics = nlohmann::json::array();
+  for (const auto &cfg : topic_configs_) {
+    topics.push_back({{"name", cfg.name},
+                      {"type", cfg.type},
+                      {"requires_tf", cfg.requires_tf},
+                      {"target_frame", cfg.target_frame},
+                      {"max_tf_age", cfg.max_tf_age}});
+  }
+  events_ = std::make_unique<event_logger::EventLogger>(
+      this, NODE_NAME + PerceptionNode::get_namespace_append(ns),
+      nlohmann::json{{"config_file", get_parameter("config_file").as_string()},
+                     {"queue_size", queue_size_},
+                     {"slop", slop_},
+                     {"processing_rate", processing_rate_},
+                     {"processing_queue_size", processing_queue_size_},
+                     {"topics", topics}});
+
+  // log counter summary periodically
+  summary_timer_ = create_wall_timer(
+      std::chrono::seconds(5), std::bind(&PerceptionNode::log_summary, this));
+
   // defer subscription(s) until all topics are found
   discovery_start_time_ = now();
   discovery_timer_ = create_wall_timer(
@@ -72,11 +93,45 @@ PerceptionNode::PerceptionNode(const std::string &ns)
       std::bind(&PerceptionNode::discovery_timer_callback, this));
 }
 
+void PerceptionNode::log_summary() {
+  const uint64_t dropped_messages = dropped_messages_count_.load();
+  const uint64_t dropped_bundles = dropped_bundles_count_.load();
+
+  std::size_t backlog;
+  uint64_t published;
+  {
+    std::lock_guard<std::mutex> lock(processing_mutex_);
+    backlog = processing_queue_.size();
+    published = bundles_published_;
+  }
+
+  if (dropped_messages == reported_dropped_messages_ &&
+      dropped_bundles == reported_dropped_bundles_ &&
+      published == reported_bundles_published_ && backlog == 0) {
+    return;
+  }
+
+  reported_dropped_messages_ = dropped_messages;
+  reported_dropped_bundles_ = dropped_bundles;
+  reported_bundles_published_ = published;
+
+  events_->log(nlohmann::json{{"event", "summary"},
+                              {"bundles_published", published},
+                              {"backlog", backlog},
+                              {"dropped_messages", dropped_messages},
+                              {"dropped_bundles", dropped_bundles}});
+}
+
 PerceptionNode::~PerceptionNode() {
   running_ = false;
   processing_cv_.notify_all();
   if (processing_thread_.joinable())
     processing_thread_.join();
+
+  if (events_) {
+    log_summary();
+    events_->close();
+  }
 }
 
 void PerceptionNode::discovery_timer_callback() {
@@ -88,6 +143,12 @@ void PerceptionNode::discovery_timer_callback() {
       oss << "\t" << topic.first << " (" << topic.second << ")\n";
     }
     RCLCPP_INFO(get_logger(), "%s", oss.str().c_str());
+
+    nlohmann::json found = nlohmann::json::array();
+    for (const auto &topic : topics)
+      found.push_back({{"name", topic.first}, {"type", topic.second}});
+    events_->log(
+        nlohmann::json{{"event", "discovery_complete"}, {"topics", found}});
 
     create_subscriptions();
     processing_thread_ =
@@ -106,6 +167,14 @@ void PerceptionNode::discovery_timer_callback() {
       oss << "\t" << topic.first << " (" << topic.second << ")\n";
     }
     RCLCPP_ERROR(get_logger(), "%s", oss.str().c_str());
+
+    nlohmann::json missing = nlohmann::json::array();
+    for (const auto &topic : topics)
+      missing.push_back({{"name", topic.first}, {"type", topic.second}});
+    events_->log(nlohmann::json{{"event", "discovery_failed"},
+                                {"topics", missing},
+                                {"elapsed", elapsed}});
+    events_->close();
 
     discovery_timer_->cancel();
     rclcpp::shutdown();
@@ -473,6 +542,18 @@ std::vector<MessageBundle> PerceptionNode::try_create_bundle() {
         if (tf) {
           env.has_transform = true;
           env.transform = *tf;
+          if (degraded_topics_.erase(cfg.name) > 0) {
+            events_->log(nlohmann::json{{"event", "bundle_recovered"},
+                                        {"topic", cfg.name},
+                                        {"target_frame", cfg.target_frame}});
+          }
+        } else {
+          if (degraded_topics_.insert(cfg.name).second) {
+            events_->log(nlohmann::json{{"event", "bundle_degraded"},
+                                        {"topic", cfg.name},
+                                        {"target_frame", cfg.target_frame},
+                                        {"source_frame", env.data.frame_id}});
+          }
         }
       }
       bundle.entries.emplace(env.topic_name, std::move(env));
@@ -531,6 +612,7 @@ void PerceptionNode::publish_bundle_index(const MessageBundle &bundle) {
 void PerceptionNode::enqueue_bundle(MessageBundle bundle) {
   std::lock_guard<std::mutex> lock(processing_mutex_);
   processing_queue_.push_back(std::move(bundle));
+  ++bundles_published_;
 
   // drop bundles arriving faster than they are being consumed, once the queue
   // exceeds processing_queue_size_
@@ -559,6 +641,8 @@ void PerceptionNode::processing_thread_main() {
     try {
       process_bundle(bundle);
     } catch (const std::exception &ex) {
+      events_->log(nlohmann::json{{"event", "bundle_processing_failed"},
+                                  {"error", ex.what()}});
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
                             "dropping bundle: %s", ex.what());
     }
