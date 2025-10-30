@@ -18,3 +18,7 @@
 	path = src/pmp-a0509
 	url = https://github.com/wsu-pmp/pmp-a0509.git
 	branch = main
+[submodule "src/object-detection-node"]
+	path = src/object-detection-node
+	url = https://github.com/wsu-pmp/object-detection-node.git
+	branch = main
