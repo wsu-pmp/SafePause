@@ -44,6 +44,7 @@ class ObjectApproachNode(Node):
         self.declare_parameter("objects_topic", "/obj_det/small_objects")
         self.declare_parameter("move_action", "/move_action")
         self.declare_parameter("min_accumulation", 3)
+        self.declare_parameter("move_action_timeout", 5.0)  # seconds
 
         self.max_range = self.get_parameter("max_range").value
         self.approach_distance = self.get_parameter("approach_distance").value
@@ -53,6 +54,7 @@ class ObjectApproachNode(Node):
         self.objects_topic = self.get_parameter("objects_topic").value
         self.move_action = self.get_parameter("move_action").value
         self.min_accumulation = self.get_parameter("min_accumulation").value
+        self.move_action_timeout = self.get_parameter("move_action_timeout").value
 
         self.events = EventLogger(
             self,
@@ -66,6 +68,7 @@ class ObjectApproachNode(Node):
                 "objects_topic": self.objects_topic,
                 "move_action": self.move_action,
                 "min_accumulation": self.min_accumulation,
+                "move_action_timeout": self.move_action_timeout,
             },
         )
 
@@ -187,9 +190,7 @@ class ObjectApproachNode(Node):
             self.events.log({"event": "approach_pose_failed"})
             return
 
-        # send goal
-        self.send_moveit_goal(approach_pose)
-        self.goal_sent = True
+        self.goal_sent = self.send_moveit_goal(approach_pose)
 
     def get_object_distance(self, obj, header: Header) -> Optional[float]:
         try:
@@ -416,9 +417,24 @@ class ObjectApproachNode(Node):
 
         return np.array([x, y, z, w])
 
-    def send_moveit_goal(self, target_pose: PoseStamped):
+    def send_moveit_goal(self, target_pose: PoseStamped) -> bool:
         self.get_logger().info("Waiting for MoveGroup action server...")
-        self._move_action_client.wait_for_server()
+
+        if not self._move_action_client.wait_for_server(
+            timeout_sec=self.move_action_timeout
+        ):
+            self.get_logger().error(
+                f"MoveGroup action server '{self.move_action}' unavailable after "
+                f"{self.move_action_timeout}s; will retry on further detections"
+            )
+            self.events.log(
+                {
+                    "event": "move_action_unavailable",
+                    "move_action": self.move_action,
+                    "timeout": self.move_action_timeout,
+                }
+            )
+            return False
 
         goal_msg = MoveGroup.Goal()
 
@@ -487,6 +503,7 @@ class ObjectApproachNode(Node):
             goal_msg, feedback_callback=self.feedback_callback
         )
         send_goal_future.add_done_callback(self.goal_response_callback)
+        return True
 
     def goal_response_callback(self, future):
         goal_handle = future.result()

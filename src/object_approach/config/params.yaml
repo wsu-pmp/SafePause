@@ -8,3 +8,4 @@ object_approach_node:
     objects_topic: "/obj_det/small_objects"
     move_action: "/move_action"       # MoveIt action server
     min_accumulation: 3               # Messages to accumulate before selecting
+    move_action_timeout: 5.0          # Wait for MoveGroup action server (s)
