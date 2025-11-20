@@ -20,8 +20,11 @@ from moveit_msgs.msg import (
     PositionConstraint,
 )
 from rclpy.action import ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.time import Time
 from shape_msgs.msg import SolidPrimitive
 from std_msgs.msg import Header
 from tf2_ros import TransformException
@@ -45,6 +48,7 @@ class ObjectApproachNode(Node):
         self.declare_parameter("move_action", "/move_action")
         self.declare_parameter("min_accumulation", 3)
         self.declare_parameter("move_action_timeout", 5.0)  # seconds
+        self.declare_parameter("tf_timeout", 1.0)  # seconds
 
         self.max_range = self.get_parameter("max_range").value
         self.approach_distance = self.get_parameter("approach_distance").value
@@ -55,6 +59,7 @@ class ObjectApproachNode(Node):
         self.move_action = self.get_parameter("move_action").value
         self.min_accumulation = self.get_parameter("min_accumulation").value
         self.move_action_timeout = self.get_parameter("move_action_timeout").value
+        self.tf_timeout = self.get_parameter("tf_timeout").value
 
         self.events = EventLogger(
             self,
@@ -69,6 +74,7 @@ class ObjectApproachNode(Node):
                 "move_action": self.move_action,
                 "min_accumulation": self.min_accumulation,
                 "move_action_timeout": self.move_action_timeout,
+                "tf_timeout": self.tf_timeout,
             },
         )
 
@@ -84,11 +90,14 @@ class ObjectApproachNode(Node):
         self.accumulated_objects = []
         self.accumulation_count = 0
 
+        # exclusive group - one detection cycle at a time, but in parallel with
+        # the listener's tf callbacks
         self.subscription = self.create_subscription(
             ObjectsStamped,
             self.objects_topic,
             self.objects_callback,
             10,
+            callback_group=MutuallyExclusiveCallbackGroup(),
         )
 
         self.get_logger().info("Object Approach Node initialized")
@@ -198,8 +207,8 @@ class ObjectApproachNode(Node):
             transform = self.tf_buffer.lookup_transform(
                 self.base_frame,
                 header.frame_id,
-                rclpy.time.Time(),
-                timeout=Duration(seconds=1.0),
+                Time.from_msg(header.stamp),
+                timeout=Duration(seconds=self.tf_timeout),
             )
 
             # pos in objects own frame
@@ -237,8 +246,8 @@ class ObjectApproachNode(Node):
             transform = self.tf_buffer.lookup_transform(
                 self.base_frame,
                 header.frame_id,
-                rclpy.time.Time(),
-                timeout=Duration(seconds=1.0),
+                Time.from_msg(header.stamp),
+                timeout=Duration(seconds=self.tf_timeout),
             )
 
             # transform corners of bounding box to base_link
@@ -556,7 +565,9 @@ def main(args=None):
     node = None
     try:
         node = ObjectApproachNode()
-        rclpy.spin(node)
+        # multi threaded so tf callbacks can run while a detection cycle blocks
+        # in a transform lookup
+        rclpy.spin(node, executor=MultiThreadedExecutor())
     except KeyboardInterrupt:
         logger.info("Interrupt received. Shutting down.")
     except BaseException as ex:
