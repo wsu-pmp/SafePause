@@ -1,0 +1,4 @@
+string storage_path # path to store rosbag
+---
+bool success        # indicate successful run of triggered service
+string message      # informational, e.g. for error messages
