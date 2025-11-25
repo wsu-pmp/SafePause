@@ -1,0 +1,24 @@
+collision_objects:
+  primitives:
+    - frame_id: base_link
+      primitive:
+        type: BOX
+        dimensions: [1.2, 1.2, 0.001]
+      pose:
+        position: {x: 0.4, y: 0.4, z: -0.001}
+        orientation: {x: 0, y: 0, z: 0, w: 1}
+    - frame_id: base_link
+      primitive:
+        type: CYLINDER
+        dimensions: [1.0, 0.2]
+      pose:
+        position: {x: 0.8, y: 0.05, z: 0.5}
+        orientation: {x: 0, y: 0, z: 0, w: 1}
+
+  # planes:
+  #   - frame_id: base_link
+  #     plane:
+  #       coef: [0, 0, 1, -0.5]
+  #     pose:
+  #       position: {x: 0, y: 0, z: 0}
+  #       orientation: {x: 0, y: 0, z: 0, w: 1}

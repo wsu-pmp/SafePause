@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
     RCLCPP_INFO(controller->get_logger(), "Services:");
     RCLCPP_INFO(controller->get_logger(), "\trecording_controller/start");
     RCLCPP_INFO(controller->get_logger(),
-                "\t\tsafepause_mgs/srv/StartRecording");
+                "\t\tsafepause_msgs/srv/StartRecording");
     RCLCPP_INFO(controller->get_logger(), "\trecording_controller/stop");
     RCLCPP_INFO(controller->get_logger(), "\t\tstd_srvs/srv/Trigger");
 

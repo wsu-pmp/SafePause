@@ -11,6 +11,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosidl_runtime_cpp REQUIRED)
@@ -86,8 +87,26 @@ install(TARGETS
 )
 
 
+# planning_scene_collision_adder
+ament_python_install_package(${PROJECT_NAME})
+
+# Install Python node as executable
+install(
+  PROGRAMS
+    training_recorder/planning_scene_collision_adder.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME planning_scene_collision_adder
+)
+
+
 # install launch/
 install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+
+# install config/
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -76,7 +76,17 @@ def generate_launch_description():
             ],
         )
 
-        return [dsr_zed_moveit_config, recording_controller]
+        planning_scene_collision_adder = Node(
+            package="training_recorder",
+            executable="planning_scene_collision_adder",
+            output="screen",
+        )
+
+        return [
+            dsr_zed_moveit_config,
+            recording_controller,
+            planning_scene_collision_adder,
+        ]
 
     return LaunchDescription(
         declared_arguments + [OpaqueFunction(function=launch_setup)]
