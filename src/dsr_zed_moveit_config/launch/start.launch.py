@@ -71,6 +71,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "launch_rviz", default_value="true", description="Launch RViz?"
         ),
+        DeclareLaunchArgument(
+            "launch_zed",
+            default_value="true",
+            description="Launch zed_wrapper (zed2i)?",
+        ),
     ]
 
     def launch_setup(context, *args, **kwargs):
@@ -174,6 +179,23 @@ def generate_launch_description():
         # Moveit2 config
         rviz_node = OpaqueFunction(function=rviz_node_function)
 
+        # zed_wrapper
+        zed_wrapper = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [
+                    PathJoinSubstitution(
+                        [
+                            FindPackageShare("zed_wrapper"),
+                            "launch",
+                            "zed_camera.launch.py",
+                        ]
+                    )
+                ]
+            ),
+            launch_arguments={"publish_tf": "false", "camera_model": "zed2i"}.items(),
+            condition=IfCondition(LaunchConfiguration("launch_zed")),
+        )
+
         # Delay rviz start after `joint_state_broadcaster`
         delay_rviz_after_joint_state_broadcaster_spawner = RegisterEventHandler(
             event_handler=OnProcessExit(
@@ -190,6 +212,7 @@ def generate_launch_description():
             joint_state_broadcaster_spawner,
             dsr_moveit_controller_spawner,
             control_node,
+            zed_wrapper,
         ]
 
     return LaunchDescription(ARGUMENTS + [OpaqueFunction(function=launch_setup)])
