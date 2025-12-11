@@ -124,21 +124,24 @@ class ObjectApproachNode(Node):
             )
             return
 
-        # select object and send goal
-        self.process_accumulated_objects()
+        # take batch and reset accumulation
+        batch = self.accumulated_objects
+        self.accumulated_objects = []
+        self.accumulation_count = 0
 
-    def process_accumulated_objects(self):
+        # select object and send goal
+        self.process_accumulated_objects(batch)
+
+    def process_accumulated_objects(self, batch: list[ObjectsStamped]):
         # flatten objects from accumulated messages
         all_objects = []
-        for msg in self.accumulated_objects:
+        for msg in batch:
             for obj in msg.objects:
                 all_objects.append((obj, msg.header))
 
         if not all_objects:
             self.get_logger().warn("No objects detected in accumulated messages")
-            self.events.log(
-                {"event": "cycle_empty", "messages": len(self.accumulated_objects)}
-            )
+            self.events.log({"event": "cycle_empty", "messages": len(batch)})
             return
 
         self.get_logger().info(f"Processing {len(all_objects)} total detected objects")
@@ -163,7 +166,7 @@ class ObjectApproachNode(Node):
         self.events.log(
             {
                 "event": "cycle_processed",
-                "messages": len(self.accumulated_objects),
+                "messages": len(batch),
                 "objects": len(all_objects),
                 "in_range": len(objects_in_range),
                 "lookup_failures": lookup_failures,
