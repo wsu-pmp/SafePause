@@ -41,6 +41,61 @@ ros2 launch dsr_bringup2 dsr_bringup2_moveit.launch.py mode:=virtual model:=a050
 ros2 launch dsr_bringup2 dsr_bringup2_moveit.launch.py mode:=real model:=a0509 host:=<robot ip>
 ```
 
+### `perception_pkg`
+`PerceptionNode` synchronizes messages from multiple topics into logical bundles, based on [`message_filters::sync_policies::ApproximateTime`](https://docs.ros.org/en/humble/p/message_filters/doc/Tutorials/Approximate-Synchronizer-Cpp.html), which requires types to be known at compile-time. `PerceptionNode` works with arbitrary topic types specified via a YAML config by storing type-erased messages that can later be downcast for processing. Time synchronisation will use message [`header`](https://docs.ros.org/en/humble/p/std_msgs/msg/Header.html) if one exists, defaulting to the message arrival time otherwise.
+
+Bundles can be processed internally (currently placeholder logic), and are published as lightweight bundle indices to allow external consumers to identify messages belonging to bundles.
+
+The optional `--namespace` argument allows multiple nodes to run simultaneously, allowing for topics to be combined arbitrarily across more than one bundle (e.g. separating low and high rate topics such that slow messages don't bottleneck faster ones).
+
+**Arguments** (passed via `--ros-args`)
+
+| Argument        | Type   | Required | Description |
+|-----------------|--------|----------|-------------|
+| `--namespace`   | string | No       | Namespace under which the node is created, affects topic name of bundle index pub |
+
+Example:
+```bash
+ros2 run perception_pkg perception_node --ros-args --namespace foo
+```
+
+**Parameters** (passed via `--ros-args -p`)
+| Name              | Type     | Required | Default | Description |
+|-------------------|----------|----------|---------|-------------|
+| `config_file`     | string   | Yes      | —       | Path to the YAML configuration describing input topics, message types, and TF requirements |
+| `queue_size`      | integer  | No       | `10`    | Maximum number of messages retained per input topic queue |
+| `slop`            | double   | No       | `0.1`   | Maximum allowed time difference (in seconds) between messages in a bundle |
+| `processing_rate` | double   | No       | `10.0`  | Optional rate (Hz) at which processing of bundles occurs |
+
+
+Example:
+```bash
+ros2 run perception_pkg perception_node --ros-args -p config_file:=./src/perception_pkg/config/example.yaml
+```
+
+**Example config YAML**
+```yaml
+variables:
+  - &TARGET_FRAME base_link
+  - &MAX_TF_AGE 0.05 # seconds
+
+topics:
+  - name: /point_cloud
+    type: geometry_msgs/msg/PointCloud2
+    requires_tf: true
+    target_frame: *TARGET_FRAME
+    max_tf_age: *MAX_TF_AGE
+    
+  - name: /pose
+    type: geometry_msgs/msg/PoseStamped
+    requires_tf: true
+    target_frame: *TARGET_FRAME
+    max_tf_age: *MAX_TF_AGE
+
+  - name: /chatter
+    type: std_msgs/msg/String
+    requires_tf: false
+```
 
 ## Dev Setup
 ### Prerequisites
