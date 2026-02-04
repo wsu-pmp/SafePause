@@ -1,0 +1,9 @@
+object_approach_node:
+  ros__parameters:
+    max_range: 1.05                   # Max distance to consider objects (m)
+    approach_distance: 0.05           # Distance from object face (m)
+    base_frame: "base_link"           # Robot base frame
+    planning_group: "manipulator"     # MoveIt planning group
+    end_effector_link: "link_6"       # End effector link name
+    objects_topic: "/obj_det/small_objects"
+    move_action: "/move_action"       # MoveIt action server
