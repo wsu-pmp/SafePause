@@ -39,6 +39,8 @@ AMENT_IGNORE
 rosbag*/
 !/rosbag/
 !/rosbag/**/rosbag*/
+!/src/rosbag2_multirecord/
+!/src/rosbag2_multirecord/**
 
 
 ### logs ### 
