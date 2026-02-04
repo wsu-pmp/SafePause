@@ -1,0 +1,23 @@
+topic_groups:
+  - - /joint_states
+    - /tf
+    - /tf_static
+    - /dsr_moveit_controller
+    - /joint_trajectory
+
+  - - /motion_plan_request
+    - /error
+
+  - - /zed/zed_node/point_cloud/cloud_registered
+  
+  - - /zed/zed_node/obj_det/objects
+    - /obj_det/small_objects
+
+qos_overrides:
+  /tf_static:
+    reliability: reliable
+    durability: transient_local
+    history: keep_last
+    depth: 1
+
+output_bag_dir: ./multirecord-out
