@@ -1,4 +1,5 @@
 import random
+import traceback
 from typing import Optional
 
 import numpy as np
@@ -26,12 +27,14 @@ from std_msgs.msg import Header
 from tf2_ros import TransformException
 from zed_msgs.msg import ObjectsStamped
 
+NODE_NAME: str = "object_approach_node"
+
 
 class ObjectApproachNode(Node):
     """Node to approach detected objects with MoveIt."""
 
     def __init__(self):
-        super().__init__("object_approach_node")
+        super().__init__(NODE_NAME)
 
         self.declare_parameter("max_range", 1.05)  # meters
         self.declare_parameter("approach_distance", 0.05)
@@ -464,13 +467,20 @@ class ObjectApproachNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    node = ObjectApproachNode()
+    logger = rclpy.logging.get_logger(NODE_NAME)
 
+    node = None
     try:
+        node = ObjectApproachNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        logger.info("Interrupt received. Shutting down.")
+    except BaseException as ex:
+        logger.error(str(ex))
+        logger.debug(traceback.format_exc())
     finally:
-        node.destroy_node()
+        if node:
+            node.destroy_node()
+
         if rclpy.ok():
-            rclpy.shutdown()
+            rclpy.try_shutdown()
