@@ -103,6 +103,8 @@ class ObjectApproachNode(Node):
             for obj in msg.objects:
                 all_objects.append((obj, msg.header))
 
+                print(obj)
+
         if not all_objects:
             self.get_logger().warn("No objects detected in accumulated messages")
             return
@@ -397,9 +399,15 @@ class ObjectApproachNode(Node):
         pos_constraint.constraint_region = BoundingVolume()
         box = SolidPrimitive()
         box.type = SolidPrimitive.BOX
-        box.dimensions = [0.01, 0.01, 0.01]  # 1cm tolerance
+        # box.dimensions = [0.01, 0.01, 0.01]  # 1cm tolerance
+        box.dimensions = [0.05, 0.05, 0.05]
         pos_constraint.constraint_region.primitives = [box]
-        pos_constraint.constraint_region.primitive_poses = [target_pose.pose]
+        # pos_constraint.constraint_region.primitive_poses = [target_pose.pose]
+        from geometry_msgs.msg import Pose as GeoPose
+        box_pose = GeoPose()
+        box_pose.position = target_pose.pose.position
+        box_pose.orientation.w = 1.0  # identity rotation, not EE orientation
+        pos_constraint.constraint_region.primitive_poses = [box_pose]
         pos_constraint.weight = 1.0
 
         goal_constraint.position_constraints = [pos_constraint]
@@ -409,9 +417,9 @@ class ObjectApproachNode(Node):
         orient_constraint.header = target_pose.header
         orient_constraint.link_name = self.end_effector_link
         orient_constraint.orientation = target_pose.pose.orientation
-        orient_constraint.absolute_x_axis_tolerance = 0.1  # radians
-        orient_constraint.absolute_y_axis_tolerance = 0.1
-        orient_constraint.absolute_z_axis_tolerance = 0.1
+        orient_constraint.absolute_x_axis_tolerance = 0.5  # radians
+        orient_constraint.absolute_y_axis_tolerance = 0.5
+        orient_constraint.absolute_z_axis_tolerance = 0.5
         orient_constraint.weight = 1.0
 
         goal_constraint.orientation_constraints = [orient_constraint]

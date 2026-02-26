@@ -6,9 +6,12 @@ topic_groups:
     - /joint_trajectory
 
   - - /motion_plan_request
+    - /perception_node/bundle_index
     - /error
 
   - - /zed/zed_node/point_cloud/cloud_registered
+
+  - - /zed/zed_node/left/image_rect_color/compressed
   
   - - /zed/zed_node/obj_det/objects
     - /obj_det/small_objects

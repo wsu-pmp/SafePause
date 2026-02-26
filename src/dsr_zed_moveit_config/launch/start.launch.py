@@ -253,8 +253,11 @@ def generate_launch_description():
             "publish_tf": "false",
             "camera_model": "zed2i",
             "object_detection.od_enabled": "true",
-            "body_tracking.bt_enabled": "true",
+            # "body_tracking.bt_enabled": "true",
             "pos_tracking.pos_tracking_enabled": "true",
+            "object_detection.confidence_threshold": "10.0", # Lower from default (50) to catch static objects
+            "object_detection.prediction_timeout_s": "90.0", # Keep tracking if AI "blinks"
+            "object_detection.filtering_mode": "NONE",
         }.items(),
         condition=IfCondition(LaunchConfiguration("launch_zed")),
     )

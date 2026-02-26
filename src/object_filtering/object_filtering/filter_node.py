@@ -5,7 +5,7 @@ import rclpy
 from rclpy.node import Node
 from visualization_msgs.msg import Marker, MarkerArray
 from zed_msgs.msg import ObjectsStamped
-
+from builtin_interfaces.msg import Time
 
 class SmallObjFilter(Node):
     def __init__(self):
@@ -61,6 +61,7 @@ class SmallObjFilter(Node):
             # --- republish ObjectsStamped ---
             out_msg = ObjectsStamped()
             out_msg.header = msg.header
+            msg.header.stamp = Time(sec=0, nanosec=0)
             out_msg.objects = filtered_objects
             self.pub.publish(out_msg)
 

@@ -3,18 +3,22 @@ variables:
   - &MAX_TF_AGE 0.05 # seconds
 
 topics:
-  - name: /point_cloud
-    type: geometry_msgs/msg/PointCloud2
+  - name: /joint_states
+    type: sensor_msgs/msg/JointState
+    requires_tf: false
+
+  - name: /zed/zed_node/point_cloud/cloud_registered
+    type: sensor_msgs/msg/PointCloud2
     requires_tf: true
     target_frame: *TARGET_FRAME
     max_tf_age: *MAX_TF_AGE
     
-  - name: /pose
-    type: geometry_msgs/msg/PoseStamped
+  - name: /zed/zed_node/obj_det/objects
+    type: zed_msgs/msg/ObjectsStamped
     requires_tf: true
     target_frame: *TARGET_FRAME
     max_tf_age: *MAX_TF_AGE
 
-  - name: /chatter
-    type: std_msgs/msg/String
+  - name: /zed/zed_node/left/image_rect_color/compressed
+    type: sensor_msgs/msg/CompressedImage
     requires_tf: false
