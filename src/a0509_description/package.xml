@@ -13,6 +13,7 @@
   <test_depend>python3-pytest</test_depend>
 
   <exec_depend>dsr_description2</exec_depend>
+  <exec_depend>dsr_controller2</exec_depend>
   <exec_depend>zed_wrapper</exec_depend>
 
   <export>
