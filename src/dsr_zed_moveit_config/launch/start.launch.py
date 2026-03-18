@@ -4,8 +4,7 @@
 import os
 
 from ament_index_python.packages import get_package_share_directory
-
-# from dsr_bringup2.utils import read_update_rate
+from dsr_bringup2.utils import read_update_rate
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -118,7 +117,7 @@ def generate_launch_description():
         ),
     ]
 
-    # update_rate = str(read_update_rate())  # get update_rate from yaml
+    update_rate = str(read_update_rate())  # get update_rate from yaml
 
     # CHANGE: substitute a0509_description in control_node
     robot_description_path = PathJoinSubstitution(
@@ -143,8 +142,8 @@ def generate_launch_description():
             LaunchConfiguration("port"),
             " mode:=",
             LaunchConfiguration("mode"),
-            # " update_rate:=",
-            # update_rate,
+            " update_rate:=",
+            update_rate,
         ]
     )
 
