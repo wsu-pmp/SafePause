@@ -65,6 +65,14 @@ class SmallObjFilter(Node):
 
         # --- publish markers for RViz ---
         marker_array = MarkerArray()
+
+        # delete all marker
+        delete_all = Marker()
+        delete_all.header = msg.header
+        delete_all.type = Marker.DELETEALL
+        delete_all.action = 3  # deletes all objects
+        marker_array.markers.append(delete_all)
+
         for i, obj in enumerate(filtered_objects):
             # Cube marker
             cube = Marker()
