@@ -26,6 +26,9 @@ class SmallObjFilter(Node):
         self.size_threshold = 0.9  # meters
         self.max_objects = 10
 
+        # State
+        self.previous_num_objs = None
+
         self.get_logger().info(
             "SmallObjFilter started — publishing /obj_det/small_objects and /obj_det/small_objects/markers"
         )
@@ -128,7 +131,11 @@ class SmallObjFilter(Node):
 
         self.marker_pub.publish(marker_array)
 
-        self.get_logger().info(f"Published {len(filtered_objects)} small objects")
+        if (num_objs := len(filtered_objects)) != self.previous_num_objs:
+            self.get_logger().info(
+                f"Published {num_objs} small object{'s' if num_objs != 1 else ''}"
+            )
+            self.previous_num_objs = num_objs
 
 
 def main(args=None):
