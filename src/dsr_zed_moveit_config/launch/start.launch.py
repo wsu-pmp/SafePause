@@ -8,9 +8,11 @@ from dsr_bringup2.utils import read_update_rate
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    ExecuteProcess,
     IncludeLaunchDescription,
     OpaqueFunction,
     RegisterEventHandler,
+    TimerAction,
 )
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
@@ -230,7 +232,7 @@ def generate_launch_description():
         ],
     )
 
-    # # Moveit2 config
+    # Moveit2 config
     rviz_node = OpaqueFunction(function=rviz_node_function)
 
     # CHANGE: zed_wrapper
@@ -246,7 +248,42 @@ def generate_launch_description():
                 )
             ]
         ),
-        launch_arguments={"publish_tf": "false", "camera_model": "zed2i"}.items(),
+        launch_arguments={
+            "publish_tf": "false",
+            "camera_model": "zed2i",
+            "object_detection.od_enabled": "true",
+            "body_tracking.bt_enabled": "true",
+            "pos_tracking.pos_tracking_enabled": "true",
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("launch_zed")),
+    )
+
+    enable_zed_services = TimerAction(
+        period=5.0,  # delay service call
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    "ros2",
+                    "service",
+                    "call",
+                    "/zed/zed_node/enable_obj_det",
+                    "std_srvs/srv/SetBool",
+                    "{data: true}",
+                ],
+                output="screen",
+            ),
+            ExecuteProcess(
+                cmd=[
+                    "ros2",
+                    "service",
+                    "call",
+                    "/zed/zed_node/enable_body_trk",
+                    "std_srvs/srv/SetBool",
+                    "{data: true}",
+                ],
+                output="screen",
+            ),
+        ],
         condition=IfCondition(LaunchConfiguration("launch_zed")),
     )
 
@@ -283,6 +320,7 @@ def generate_launch_description():
         dsr_moveit_controller_spawner,
         control_node,
         zed_wrapper,
+        enable_zed_services,
     ]
 
     return LaunchDescription(ARGUMENTS + nodes)
