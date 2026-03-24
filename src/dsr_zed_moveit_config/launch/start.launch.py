@@ -80,6 +80,7 @@ def rviz_node_function(context):
                 moveit_config.robot_description_kinematics,
                 moveit_config.joint_limits,
             ],
+            condition=IfCondition(LaunchConfiguration("launch_rviz")),
         ),
     ]
 
@@ -116,6 +117,11 @@ def generate_launch_description():
             "launch_zed",
             default_value="true",
             description="Launch zed_wrapper (zed2i)?",
+        ),
+        DeclareLaunchArgument(
+            "launch_rviz",
+            default_value="true",
+            description="Launch RViz?",
         ),
     ]
 
