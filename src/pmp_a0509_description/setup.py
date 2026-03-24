@@ -2,7 +2,7 @@ from glob import glob
 
 from setuptools import find_packages, setup
 
-package_name = "a0509_description"
+package_name = "pmp_a0509_description"
 
 setup(
     name=package_name,

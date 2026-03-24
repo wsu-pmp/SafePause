@@ -11,7 +11,7 @@ def generate_launch_description():
     # process URDF with xacro
     urdf_file = PathJoinSubstitution(
         [
-            FindPackageShare("a0509_description"),
+            FindPackageShare("pmp_a0509_description"),
             "urdf",
             "a0509.urdf.xacro",
         ]
@@ -38,7 +38,7 @@ def generate_launch_description():
     # rviz
     rviz_config_file = PathJoinSubstitution(
         [
-            FindPackageShare("a0509_description"),
+            FindPackageShare("pmp_a0509_description"),
             "rviz",
             "a0509.rviz",
         ]

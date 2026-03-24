@@ -139,10 +139,10 @@ def generate_launch_description():
 
     update_rate = str(read_update_rate())  # get update_rate from yaml
 
-    # CHANGE: substitute a0509_description in control_node
+    # CHANGE: substitute pmp_a0509_description in control_node
     robot_description_path = PathJoinSubstitution(
         [
-            FindPackageShare("a0509_description"),
+            FindPackageShare("pmp_a0509_description"),
             "urdf",
             "a0509.urdf.xacro",
         ]
@@ -215,7 +215,7 @@ def generate_launch_description():
         ],
     )
 
-    # CHANGE: substitute a0509_description in robot_state_pub_node
+    # CHANGE: substitute pmp_a0509_description in robot_state_pub_node
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
