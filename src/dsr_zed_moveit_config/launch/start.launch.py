@@ -2,7 +2,9 @@
 # https://raw.githubusercontent.com/DoosanRobotics/doosan-robot2/refs/heads/humble/dsr_moveit2/dsr_moveit_config_a0509/launch/start.launch.py
 
 import os
+from pathlib import Path
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from dsr_bringup2.utils import read_update_rate
 from launch import LaunchDescription
@@ -48,6 +50,16 @@ def rviz_node_function(context):
     moveit_config = MoveItConfigsBuilder(
         "a0509", package_name=package_name_str
     ).to_moveit_configs()
+
+    configs_dump_path = Path(
+        get_package_share_directory(package_name_str),
+        "config",
+        "moveit_configs.yaml",
+    )
+
+    configs_dump_path.parent.mkdir(parents=True, exist_ok=True)
+    with configs_dump_path.open("w") as f:
+        yaml.dump({"/**": {"ros__parameters": moveit_config.to_dict()}}, f)
 
     run_move_group_node = Node(
         package="moveit_ros_move_group",
