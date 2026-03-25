@@ -38,7 +38,7 @@ def rviz_node_function(context):
     # model_value = LaunchConfiguration('model').perform(context)
 
     # model_value_str = f"{model_value}"
-    package_name_str = "dsr_zed_moveit_config"
+    package_name_str = "pmp_a0509_moveit_config"
 
     # Get the package path using FindPackageShare
     package_path_str = FindPackageShare(package_name_str).perform(context)
@@ -46,7 +46,7 @@ def rviz_node_function(context):
     print("Package name:", package_name_str)
     print("Package path:", package_path_str)
 
-    # CHANGE: use default dsr_zed_moveit_config MoveItConfigsBuilder
+    # CHANGE: use default pmp_a0509_moveit_config MoveItConfigsBuilder
     moveit_config = MoveItConfigsBuilder(
         "a0509", package_name=package_name_str
     ).to_moveit_configs()
