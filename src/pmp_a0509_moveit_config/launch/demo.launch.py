@@ -12,7 +12,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    package_name = "dsr_zed_moveit_config"
+    package_name = "pmp_a0509_moveit_config"
     pkg_share = FindPackageShare(package_name)
 
     declared_arguments = [

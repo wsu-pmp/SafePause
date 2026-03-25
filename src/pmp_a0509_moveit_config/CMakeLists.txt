@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(dsr_zed_moveit_config)
+project(pmp_a0509_moveit_config)
 
 find_package(ament_cmake REQUIRED)
 
