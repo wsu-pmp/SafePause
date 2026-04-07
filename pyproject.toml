@@ -10,6 +10,7 @@ extend-exclude = [
     # explicitly exclude submodules
     "src/doosan-robot2",
     "src/ObjRec_Patient_Mobility",
+    "src/zed-ros2-interfaces",
     "src/zed-ros2-wrapper"
 ]
 
