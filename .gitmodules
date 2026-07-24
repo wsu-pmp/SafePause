@@ -13,7 +13,7 @@
 [submodule "src/zed-ros2-interfaces"]
 	path = src/zed-ros2-interfaces
 	url = https://github.com/stereolabs/zed-ros2-interfaces.git
-	branch = humble
+	branch = master
 [submodule "src/pmp-a0509"]
 	path = src/pmp-a0509
 	url = https://github.com/wsu-pmp/pmp-a0509.git
